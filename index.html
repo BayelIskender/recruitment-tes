@@ -9,52 +9,136 @@
         .card { background: white; padding: 20px; border-radius: 10px; max-width: 600px; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         iframe { width: 100%; height: 500px; border: none; }
         input { width: 100%; padding: 10px; margin-bottom: 10px; }
-        button { width: 100%; padding: 15px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button { width: 100%; padding: 15px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        button:disabled { background: #cccccc; cursor: not-allowed; }
     </style>
 </head>
 <body>
     <div class="card" id="setup">
         <h2>Регистрация</h2>
-        <input type="text" id="name" placeholder="Введите имя">
+        <input type="text" id="name" placeholder="Введите ваше полное имя">
         <button onclick="start()">Начать тест</button>
     </div>
 
     <div class="card" id="test" style="display:none;">
         <video id="video" width="100%" height="auto" autoplay playsinline style="display:none;"></video>
-        <iframe src="https://forms.gle/DJtcEVMVLGwxBjfKA"></iframe>
-        <button onclick="finish()">Завершить</button>
+        
+        <iframe src="https://forms.gle/7yApMjy5oSbDhPAn6"></iframe>
+        
+        <button id="finishBtn" onclick="finish()" style="background: #28a745; margin-top: 15px;">Я отправил(а) форму (Завершить)</button>
     </div>
 
     <script>
+        // ВСТАВЬТЕ ССЫЛКУ НА APPS SCRIPT НИЖЕ
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxep4nfsEIKDixNG-edxn-EAFEqXjA688uPu45tZZV_sSFKpy__7npQZH75B2GhmXBExw/exec";
+        
         let cheatCount = 0;
         let isTesting = false;
+        let startTime;
+        let photoTimer;
 
+        // Отслеживание читерства
         document.addEventListener("visibilitychange", () => {
-            if (document.hidden && isTesting) { cheatCount++; alert("Нарушение!"); }
+            if (document.hidden && isTesting) { 
+                cheatCount++; 
+                alert("ВНИМАНИЕ: Вы свернули браузер или переключили вкладку! Это нарушение зафиксировано."); 
+            }
         });
-  
-        async function start() {
-            const name = document.getElementById('name').value;
-            if(!name) return alert("Введите имя");
-            
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            document.getElementById('video').srcObject = stream;
-            
-            document.getElementById('setup').style.display = 'none';
-            document.getElementById('test').style.display = 'block';
-            isTesting = true;
 
-            setInterval(async () => {
-                const canvas = document.createElement('canvas');
-                canvas.getContext('2d').drawImage(document.getElementById('video'), 0, 0, 320, 240);
-                const image = canvas.toDataURL('image/jpeg', 0.5);
-                await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ type: 'photo', name: name, image: image }) });
-            }, 60000); // 1 minute
+        async function start() {
+            const name = document.getElementById('name').value.trim();
+            if(!name) return alert("Пожалуйста, введите имя");
+            
+            try {
+                // Запрашиваем камеру
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                document.getElementById('video').srcObject = stream;
+                
+                // Переключаем экраны
+                document.getElementById('setup').style.display = 'none';
+                document.getElementById('test').style.display = 'block';
+                
+                // Запускаем тест и таймер
+                isTesting = true;
+                startTime = Date.now();
+                
+                // Запускаем процесс создания фото
+                scheduleNextPhoto(name);
+                
+            } catch (err) {
+                alert("Ошибка доступа к камере. Разрешите доступ, чтобы начать тестирование.");
+            }
         }
 
-        function finish() {
-            alert("Тест завершен");
+        // Функция случайных интервалов для фото
+        function scheduleNextPhoto(name) {
+            if (!isTesting) return;
+            
+            // Генерируем случайное число от 45000 до 90000 миллисекунд (45-90 секунд)
+            let randomDelay = Math.floor(Math.random() * (90000 - 45000 + 1)) + 45000;
+            
+            photoTimer = setTimeout(async () => {
+                if (!isTesting) return; // Проверка, не закончился ли тест во время ожидания
+                
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.getContext('2d').drawImage(document.getElementById('video'), 0, 0, 320, 240);
+                    const image = canvas.toDataURL('image/jpeg', 0.5);
+                    
+                    // Отправляем фото в фоне
+                    await fetch(SCRIPT_URL, { 
+                        method: 'POST', 
+                        mode: 'no-cors', 
+                        body: JSON.stringify({ type: 'photo', name: name, image: image }) 
+                    });
+                } catch(e) {
+                    console.log("Ошибка отправки фото");
+                }
+                
+                // Запускаем таймер для следующего фото
+                scheduleNextPhoto(name);
+                
+            }, randomDelay);
+        }
+
+        // Функция завершения теста
+        async function finish() {
+            isTesting = false; // Останавливаем чит-трекинг и фото
+            clearTimeout(photoTimer);
+            
+            // Отключаем камеру
+            const video = document.getElementById('video');
+            if(video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+            }
+
+            // Подсчитываем время
+            let totalSeconds = Math.floor((Date.now() - startTime) / 1000);
+            let minutes = Math.floor(totalSeconds / 60);
+            let seconds = totalSeconds % 60;
+            let timeString = `${minutes} мин ${seconds} сек`;
+
+            const name = document.getElementById('name').value;
+
+            // Блокируем кнопку, чтобы не нажали дважды
+            const btn = document.getElementById('finishBtn');
+            btn.innerText = "Сохранение результатов...";
+            btn.disabled = true;
+
+            // Отправляем финальные данные (время и количество читерства)
+            await fetch(SCRIPT_URL, { 
+                method: 'POST', 
+                mode: 'no-cors', 
+                body: JSON.stringify({ 
+                    type: 'result', 
+                    name: name, 
+                    time: timeString, 
+                    cheats: cheatCount 
+                }) 
+            });
+
+            // Показываем итог и перезагружаем страницу
+            alert("Тест успешно завершен!\n\nЗатраченное время: " + timeString + "\nЗафиксировано нарушений: " + cheatCount);
             location.reload();
         }
     </script>
